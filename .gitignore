@@ -1,0 +1,13 @@
+*.session
+*.session-journal
+.env
+x_api.env.txt
+.env.local
+bridge_state.json
+signal_bridge.log
+__pycache__/
+*.pyc
+ai_bridge/.env.local
+ai_bridge/*.log
+x_api.env
+.env
