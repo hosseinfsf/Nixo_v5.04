@@ -82,9 +82,9 @@ enum ENUM_SIGNAL_MODEL
 
 enum ENUM_SIGNAL_SIZE_MODE
 {
-   SIGNAL_SIZE_FIXED_LOT = 0,
-   SIGNAL_SIZE_RISK_PERCENT = 1,
-   SIGNAL_SIZE_FIXED_CASH = 2
+   SIGNAL_SIZE_FIXED_LOT = 2,
+   SIGNAL_SIZE_RISK_PERCENT = 0,
+   SIGNAL_SIZE_FIXED_CASH = 1
 };
 
 enum ENUM_NIXO_SIZE_MODE
@@ -96,8 +96,8 @@ enum ENUM_NIXO_SIZE_MODE
 
 enum ENUM_NIXO_RISK_BASE
 {
-   NIXO_BASE_BALANCE = 0,
-   NIXO_BASE_EQUITY = 1,
+   NIXO_BASE_BALANCE = 1,
+   NIXO_BASE_EQUITY = 0,
    NIXO_BASE_FREE_MARGIN = 2
 };
 
@@ -106,7 +106,7 @@ enum ENUM_NIXO_RISK_BASE
 //==================================================================
 input group "══════════ NIXO CORE ══════════"
 input ENUM_STRATEGY InpStrategy       = STRAT_ULTRA_NYAO_HYBRID; // Active Strategy (Hybrid = UltraHFT market + Nyao OCO)
-input ENUM_NIXO_TRADING_MODE InpStartupTradingMode = NIXO_MODE_STRATEGY; // Startup mode when no saved mode exists
+input ENUM_NIXO_TRADING_MODE InpStartupTradingMode = NIXO_MODE_EXTERNAL; // Start with Telegram/external signals when no mode is saved
 input long          InpMagic          = 20261102;        // Magic Number
 input bool          InpOneTradeOnly   = false;           // true = max 1 open trade; false = up to InpMaxOpenPositions
 input bool          InpOneBatchAtATime = true;           // Prevent repeated same-direction strategy batches while positions remain open
@@ -127,7 +127,7 @@ input group "══════════ RISK LADDER (ROULETTE) ════�
 input double        InpBaseRisk       = 0.25;            // Base Risk % (Step 1) – lower risk for many tight-stop trades
 input int           InpMaxStep        = 50;              // Max Risk Step
 input double        InpMaxRiskPct     = 0.50;            // Maximum risk % per trade after risk roulette
-input double        InpRouletteTrigger= 4.00;            // Activate risk roulette after +4% cumulative equity gain (0 = always on)
+input double        InpRouletteTrigger= 3.00;            // Activate risk roulette after +3% cumulative equity gain (0 = always on)
 input double        InpHardStopPct    = 5.0;             // Stop all trading at -5% from start
 input bool          InpRiskRouletteEnabled = true;      // Arm risk roulette by default; it activates after the equity trigger
 input ENUM_NIXO_RISK_BASE InpRiskBaseMode = NIXO_BASE_EQUITY; // Balance / Equity / Free Margin
@@ -268,10 +268,10 @@ input bool          InpSignalLabEnabled          = true;       // Consume bridge
 input string        InpSignalInboxFolder         = "NixoBridge\\inbox\\"; // MT5 Common\\Files subfolder
 input string        InpSignalReportFolder        = "NixoBridge\\reports\\";
 input long          InpSignalMagic               = 20261999;   // Separate magic for optional signal copying
-input bool          InpSignalLiveAllowed         = false;      // Safety gate: must be enabled in Inputs before panel can copy live
-input ENUM_SIGNAL_MODEL InpSignalLiveModel       = SIGNAL_MODEL_D_COMBINED; // Combined Order + Volume Roulette for live copying
+input bool          InpSignalLiveAllowed         = true;       // External mode automatically arms live Telegram signals
+input ENUM_SIGNAL_MODEL InpSignalLiveModel       = SIGNAL_MODEL_C_VOLUME; // Volume Roulette only; order doubling stays off
 input bool          InpSignalAllowHedge          = false;      // Allow opposite signal positions in a Hedging account
-input ENUM_SIGNAL_SIZE_MODE InpSignalSizeMode    = SIGNAL_SIZE_FIXED_LOT;
+input ENUM_SIGNAL_SIZE_MODE InpSignalSizeMode    = SIGNAL_SIZE_RISK_PERCENT;
 input double        InpSignalBaseLot             = 0.01;       // Base lot for fixed-lot mode and paper comparison
 input double        InpSignalBaseRiskPct         = 0.10;       // Base order risk % before roulette multipliers
 input double        InpSignalBaseRiskCash        = 10.0;       // Base order cash risk before roulette multipliers
@@ -297,7 +297,7 @@ input int           InpPanelX         = 15;
 input int           InpPanelY         = 25;
 input string        InpFont           = "Segoe UI";      // Panel font
 input string        InpFontFA         = "Tahoma";        // Persian-capable fallback font
-input int           InpPanelScale     = 100;             // Panel size % (60-220)
+input int           InpPanelScale     = 80;              // Panel size % (60-220)
 input ENUM_NIXO_THEME_MODE InpTheme   = NIXO_THEME_AUTO; // AUTO follows chart background unless clock mode is enabled
 input bool          InpThemeFollowClock = false;         // AUTO: local 07:00-19:00 day, otherwise night
 input ENUM_NIXO_LANGUAGE InpLanguage  = NIXO_LANG_EN;    // Panel language; toggle from the dashboard
@@ -840,6 +840,7 @@ void SaveState()
    GlobalVariableSet(GVKey("DAYPEAK"),  g_DayPeakEquity);
    GlobalVariableSet(GVKey("DAYSTOP"),  g_DailyStopped ? 1.0 : 0.0);
    GlobalVariableSet(GVKey("TRADING_MODE"),(double)g_TradingMode);
+   GlobalVariableSet(GVKey("DEFAULTS_MIGRATED_505"),1.0);
    GlobalVariableSet(GVKey("ENTRIES_PAUSED"),g_EntriesPaused?1.0:0.0);
    GlobalVariableSet(GVKey("UI_LANGUAGE"),(double)g_UILanguage);
    GlobalVariableSet(GVKey("UI_THEME"),(double)g_UITheme);
@@ -849,6 +850,7 @@ void SaveState()
 void LoadState()
 {
    if(MQLInfoInteger(MQL_TESTER)) return;
+   bool applyRequestedDefaults=!GlobalVariableCheck(GVKey("DEFAULTS_MIGRATED_505"));
    if(!GlobalVariableCheck(GVKey("SE"))) return;
 
    double se = GlobalVariableGet(GVKey("SE"));
@@ -876,6 +878,16 @@ void LoadState()
    {
       int savedMode=(int)GlobalVariableGet(GVKey("TRADING_MODE"));
       if(savedMode>=NIXO_MODE_MANUAL && savedMode<=NIXO_MODE_STRATEGY) g_TradingMode=(ENUM_NIXO_TRADING_MODE)savedMode;
+   }
+   if(applyRequestedDefaults)
+   {
+      g_TradingMode=InpStartupTradingMode;
+      g_RiskRouletteEnabled=InpRiskRouletteEnabled;
+      g_OrderRouletteEnabled=InpOrderRoulette;
+      g_Roulette=ROULETTE_OFF;
+      g_Step=1;
+      g_OrderCount=(int)Clampd(InpInitialOrders,1,OrderCountCap());
+      Print("ONE-TIME DEFAULT MIGRATION | startup mode=External Signals | risk roulette armed at configured equity trigger | order roulette=OFF");
    }
    if(GlobalVariableCheck(GVKey("ENTRIES_PAUSED"))) g_EntriesPaused=(GlobalVariableGet(GVKey("ENTRIES_PAUSED"))>0.5);
    g_ManualMode=(g_TradingMode==NIXO_MODE_MANUAL);
@@ -935,19 +947,23 @@ string TradingModeName(ENUM_NIXO_TRADING_MODE mode)
 void SetTradingMode(ENUM_NIXO_TRADING_MODE mode)
 {
    if(mode<NIXO_MODE_MANUAL || mode>NIXO_MODE_STRATEGY) return;
-   if(g_TradingMode==mode && !g_EntriesPaused) return;
+   if(g_TradingMode==mode && !g_EntriesPaused &&
+      (mode!=NIXO_MODE_EXTERNAL || !InpSignalLiveAllowed || g_SignalLiveEnabled)) return;
    ENUM_NIXO_TRADING_MODE oldMode=g_TradingMode;
    g_TradingMode=mode;
    g_ManualMode=(mode==NIXO_MODE_MANUAL);
    g_Running=false; // Strategy engine always needs an explicit START
    g_EntriesPaused=false; // explicit mode selection re-arms the selected route
-   if(mode!=NIXO_MODE_EXTERNAL) g_SignalLiveEnabled=false; // disarm NEW external execution when leaving External mode
+   g_SignalLiveEnabled=(mode==NIXO_MODE_EXTERNAL && InpSignalLiveAllowed);
    g_PendingArmType=0; // clear only unsubmitted chart-click entry intent
    g_RRPlaceArmed=false;
    ObjectDelete(0,MANUAL_LINE_OBJ);
    SaveState();
    PrintFormat("TRADING MODE | %s -> %s | NEW entries routed to selected mode only | ALL existing positions, pending orders, SL and TP left untouched",
                TradingModeName(oldMode),TradingModeName(mode));
+   if(g_SignalLiveEnabled)
+      PrintFormat("EXTERNAL SIGNALS AUTO-ARMED | live model=%s | risk roulette activates at +%.2f%% equity; order roulette remains OFF",
+                  SignalModelName((int)InpSignalLiveModel),InpRouletteTrigger);
    Alert("Nixo Mode: ",TradingModeName(mode),". Existing positions, pending orders, SL and TP are unchanged.");
 }
 
@@ -1775,6 +1791,7 @@ int SignalModelOrderStep(long sourceHash,int model,bool live=false)
 int SignalModelVolumeStep(long sourceHash,int model,bool live=false)
 {
    if(model!=2 && model!=3) return 1;
+   if(live && (!g_RiskRouletteEnabled || g_Roulette!=ROULETTE_ON)) return 1;
    return SignalStateStep(sourceHash,SignalVolumeStateSuffix(model,live),1,MathMax(1,InpSignalMaxVolumeStep));
 }
 
@@ -2856,7 +2873,7 @@ void FinalizeSignalLiveBatches()
             else if(net<0.0) next=MathMax(1,step-1);
             SignalSetStateStep(sourceHash,SignalOrderStateSuffix(model,true),next,InpSignalMaxOrderCount);
          }
-         if(model==2 || model==3)
+         if((model==2 || model==3) && g_RiskRouletteEnabled && g_Roulette==ROULETTE_ON)
          {
             int step=SignalModelVolumeStep(sourceHash,model,true);
             int next=step;
@@ -3207,7 +3224,7 @@ int OnInit()
 
    LoadState();
    g_Running=false;
-   g_SignalLiveEnabled=false;
+   g_SignalLiveEnabled=(g_TradingMode==NIXO_MODE_EXTERNAL && InpSignalLiveAllowed);
    g_ManualMode=(g_TradingMode==NIXO_MODE_MANUAL);
    if(InpPositionSizeMode==NIXO_SIZE_FIXED_LOT && (g_RiskRouletteEnabled || g_OrderRouletteEnabled))
    {
@@ -3242,7 +3259,7 @@ int OnInit()
    g_S = Clampd(InpPanelScale / 100.0, 0.6, 1.6);
    g_ShowSettings = !InpStartCompact;
    ChartSetInteger(0, CHART_EVENT_MOUSE_MOVE, true);
-   g_SignalLiveEnabled=false;
+   g_SignalLiveEnabled=(g_TradingMode==NIXO_MODE_EXTERNAL && InpSignalLiveAllowed);
    FolderCreate("NixoBridge",FILE_COMMON);
    FolderCreate("NixoBridge\\inbox",FILE_COMMON);
    FolderCreate("NixoBridge\\reports",FILE_COMMON);

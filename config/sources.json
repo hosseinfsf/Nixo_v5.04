@@ -27,8 +27,8 @@
       "channel": "Tradingfanatic77"
     },
     {
-      "id": "private_1963362260",
-      "name": "Telegram 1963362260",
+      "id": "LFT_Journals",
+      "name": "LFT_Journals",
       "source_type": "telegram",
       "enabled": true,
       "parser": "standard",
