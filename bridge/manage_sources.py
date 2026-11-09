@@ -43,7 +43,14 @@ def list_sources(data):
         print("  (none)")
     for i, s in enumerate(data["sources"], 1):
         st = source_type(s)
-        endpoint = ("@" + str(s.get("channel", ""))) if st == "telegram" else str(s.get("feed_url", ""))
+        if st == "telegram":
+            endpoint = "@" + str(s.get("channel", ""))
+        elif st == "rss":
+            endpoint = str(s.get("feed_url", ""))
+        elif st == "x":
+            endpoint = "user_id=" + str(s.get("user_id", ""))
+        else:
+            endpoint = "webhook /tradingview"
         print(f"  {i}. {'ON ' if s.get('enabled') else 'OFF'} [{st.upper()}] {s.get('name')} | {endpoint} | id={s.get('id')} | symbols={','.join(s.get('allowed_symbols', []))}")
     print()
 
@@ -64,26 +71,42 @@ def parse_symbols(raw: str) -> list[str]:
 
 
 def add_source(data):
-    print("Source type: 1) Telegram channel   2) Website RSS / Atom feed")
+    print("Source type: 1) Telegram   2) RSS/Atom   3) X API   4) TradingView webhook")
     kind = input("> ").strip()
-    if kind not in {"1", "2"}:
-        print("Choose 1 or 2.")
+    if kind not in {"1", "2", "3", "4"}:
+        print("Choose 1, 2, 3, or 4.")
         return
-    st = "telegram" if kind == "1" else "rss"
+    st = {"1": "telegram", "2": "rss", "3": "x", "4": "tradingview"}[kind]
     name = input("Display name: ").strip()
-    endpoint = input("Telegram username (without @): " if st == "telegram" else "RSS/Atom feed URL (not a normal HTML page): ").strip()
+    prompts = {
+        "telegram": "Telegram username (without @): ",
+        "rss": "RSS/Atom feed URL (not a normal HTML page): ",
+        "x": "Numeric X account user ID: ",
+        "tradingview": "TradingView source ID (letters, digits, _ or -): ",
+    }
+    endpoint = input(prompts[st]).strip()
     if st == "telegram":
         endpoint = endpoint.lstrip("@")
         if not endpoint or not re.fullmatch(r"[A-Za-z0-9_]{3,}", endpoint):
             print("Invalid Telegram channel username.")
             return
         identity = endpoint
-    else:
+    elif st == "rss":
         parsed = urlparse(endpoint)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             print("Feed URL must be a valid http(s) RSS/Atom URL.")
             return
         identity = parsed.netloc + parsed.path
+    elif st == "x":
+        if not endpoint.isdigit():
+            print("X account user ID must be numeric; handles are not resolved by this adapter.")
+            return
+        identity = endpoint
+    else:
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", endpoint):
+            print("Invalid TradingView source ID.")
+            return
+        identity = endpoint
     sid_default = source_id(identity.split("/")[-1])
     sid = source_id(input(f"Unique source ID [{sid_default}]: ").strip() or sid_default)
     if any(s.get("id") == sid for s in data["sources"]):
@@ -97,13 +120,15 @@ def add_source(data):
         "enabled": yes("Enable this source now?", False),
         "parser": "standard",
         "allowed_symbols": parse_symbols(symbols),
-        "assume_single_symbol": yes("Assume this source's only symbol if ticker is omitted?", False),
+        "assume_single_symbol": yes("Assume this source's only symbol if ticker is omitted?", False) if st in {"telegram", "rss", "x"} else False,
     }
     if st == "telegram":
         item["channel"] = endpoint
-    else:
+    elif st == "rss":
         item["feed_url"] = endpoint
         item["poll_seconds"] = 45
+    elif st == "x":
+        item["user_id"] = endpoint
     data["sources"].append(item)
     save(data)
     print("Source saved. Restart the signal bridge to apply it.")
@@ -126,7 +151,7 @@ def edit_source(data):
                 print("Invalid Telegram channel username; keeping the previous value.")
             else:
                 s["channel"] = value
-    else:
+    elif st == "rss":
         value = input(f"Feed URL [{s.get('feed_url','')}]: ").strip()
         if value:
             parsed = urlparse(value)
@@ -134,11 +159,19 @@ def edit_source(data):
                 s["feed_url"] = value
             else:
                 print("Invalid URL; keeping the previous feed URL.")
+    elif st == "x":
+        value = input(f"Numeric X account user ID [{s.get('user_id','')}]: ").strip()
+        if value:
+            if value.isdigit():
+                s["user_id"] = value
+            else:
+                print("Invalid account ID; keeping the previous value.")
     value = input(f"Allowed symbols [{','.join(s.get('allowed_symbols', []))}]: ").strip()
     if value:
         s["allowed_symbols"] = parse_symbols(value)
     s["enabled"] = yes("Enable source?", bool(s.get("enabled")))
-    s["assume_single_symbol"] = yes("Assume the only allowed symbol when ticker is omitted?", bool(s.get("assume_single_symbol")))
+    if st != "tradingview":
+        s["assume_single_symbol"] = yes("Assume the only allowed symbol when ticker is omitted?", bool(s.get("assume_single_symbol")))
     save(data)
     print("Source updated. Restart the signal bridge to apply it.")
 

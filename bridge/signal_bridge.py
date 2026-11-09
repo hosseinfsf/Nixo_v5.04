@@ -9,13 +9,17 @@ from __future__ import annotations
 import argparse
 import asyncio
 import hashlib
+import hmac
 import html
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import logging
 import os
 import re
 import sys
 import time
+import urllib.parse
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -333,6 +337,74 @@ def parse_rss_atom(xml_data: bytes) -> list[dict[str, Any]]:
     return out
 
 
+def _parse_iso_time(value: Any) -> int:
+    try:
+        return int(datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp())
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
+def parse_x_api_response(response_body: bytes, expected_user_id: str) -> list[dict[str, Any]]:
+    result = json.loads(response_body.decode("utf-8"))
+    if result.get("errors"):
+        raise ValueError("X API returned an account or access error")
+    return [
+        {"id": str(item["id"]), "text": str(item.get("text", ""))[:8000], "unix_time": _parse_iso_time(item.get("created_at"))}
+        for item in result.get("data", [])
+        if str(item.get("author_id", "")) == expected_user_id and item.get("id") and item.get("text") and _parse_iso_time(item.get("created_at")) > 0
+    ]
+
+
+def parse_tradingview_webhook(body: bytes, secret: str) -> tuple[dict[str, Any], str, int]:
+    """Validate and normalize a TradingView JSON webhook without exposing its secret."""
+    if len(body) > 16_384:
+        raise ValueError("Webhook body is too large")
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("Webhook body must be valid JSON") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("Webhook body must be a JSON object")
+    supplied_secret = str(payload.pop("secret", ""))
+    if not secret or not hmac.compare_digest(supplied_secret, secret):
+        raise PermissionError("Invalid webhook secret")
+
+    message = str(payload.get("message", payload.get("text", ""))).strip()
+    if not message:
+        side = str(payload.get("side", "")).upper()
+        symbol = str(payload.get("symbol", "")).upper()
+        kind = str(payload.get("order_kind", "MARKET")).upper()
+        if side not in {"BUY", "SELL"} or not symbol or kind not in {"MARKET", "LIMIT", "STOP"}:
+            raise ValueError("Provide message text or valid side, symbol, and order_kind fields")
+        if kind == "MARKET":
+            message = f"{side} {symbol} NOW"
+        else:
+            entry = payload.get("entry")
+            if entry in (None, "", 0, "0"):
+                raise ValueError("Pending orders require an entry price")
+            message = f"{side} {symbol} {kind} {entry}"
+        message += f"\nSL: {payload.get('sl', '')}"
+        for index, value in enumerate(payload.get("targets", []), 1):
+            if index > 3:
+                break
+            message += f"\nTP{index}: {value}"
+        for index in range(1, 4):
+            value = payload.get(f"tp{index}")
+            if value not in (None, "", 0, "0") and not payload.get("targets"):
+                message += f"\nTP{index}: {value}"
+
+    event_id = str(payload.get("alert_id", payload.get("id", ""))).strip()
+    if not event_id:
+        raise ValueError("Webhook payload must include a stable alert_id")
+    try:
+        timestamp = int(float(payload.get("unix_time", payload.get("timestamp", time.time()))))
+        if timestamp > 10_000_000_000:
+            timestamp //= 1000
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("Webhook timestamp must be Unix seconds or milliseconds") from exc
+    return payload, message, timestamp
+
+
 class Bridge:
     def __init__(self, cfg_path: Path):
         self.cfg_path = cfg_path
@@ -412,6 +484,66 @@ class Bridge:
                 event.get("entry", 0), event.get("sl", 0), event.get("tp1", 0), event.get("tp2", 0), event.get("tp3", 0),
             ])
 
+    async def run_tradingview_webhook(self, sources: list[dict[str, Any]]) -> None:
+        secret = os.environ.get("NIXO_TV_WEBHOOK_SECRET", "").strip()
+        if len(secret) < 24:
+            raise RuntimeError("Set NIXO_TV_WEBHOOK_SECRET to a random value of at least 24 characters")
+        source_map = {clean_source_id(str(source["id"])): source for source in sources}
+        host = os.environ.get("NIXO_TV_WEBHOOK_HOST", "127.0.0.1").strip() or "127.0.0.1"
+        port = int(os.environ.get("NIXO_TV_WEBHOOK_PORT", "8765"))
+        bridge = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                if self.path != "/tradingview":
+                    self.send_error(HTTPStatus.NOT_FOUND)
+                    return
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                    if length <= 0 or length > 16_384:
+                        raise ValueError("Invalid Content-Length")
+                    if "application/json" not in self.headers.get("Content-Type", "").lower():
+                        raise ValueError("Content-Type must be application/json")
+                    payload, message, timestamp = parse_tradingview_webhook(self.rfile.read(length), secret)
+                    requested_id = str(payload.get("source_id", "")).strip()
+                    if requested_id:
+                        sid = clean_source_id(requested_id)
+                        source = source_map.get(sid)
+                    elif len(source_map) == 1:
+                        sid, source = next(iter(source_map.items()))
+                    else:
+                        raise ValueError("source_id is required when multiple TradingView sources are configured")
+                    if source is None:
+                        raise ValueError("Unknown TradingView source_id")
+                    seen = bridge.state.setdefault("tv_seen", {}).setdefault(sid, [])
+                    event_id = str(payload.get("alert_id", payload.get("id")))
+                    if event_id not in seen:
+                        message_id = int(hashlib.sha256(event_id.encode("utf-8")).hexdigest()[:12], 16)
+                        bridge.handle_message(source, message_id, message, timestamp)
+                        seen.append(event_id)
+                        bridge.state["tv_seen"][sid] = seen[-500:]
+                        bridge._save_state()
+                    self.send_response(HTTPStatus.ACCEPTED)
+                    self.end_headers()
+                    self.wfile.write(b"accepted\n")
+                except PermissionError:
+                    self.send_error(HTTPStatus.UNAUTHORIZED)
+                except (ValueError, KeyError, TypeError) as exc:
+                    log.warning("Rejected TradingView webhook: %s", exc)
+                    self.send_error(HTTPStatus.BAD_REQUEST)
+
+            def log_message(self, format, *args):
+                log.info("TradingView HTTP | %s", format % args)
+
+        server = ThreadingHTTPServer((host, port), Handler)
+        server.daemon_threads = True
+        log.info("TradingView webhook listening on %s:%d/tradingview for %d source(s)", host, port, len(source_map))
+        try:
+            await asyncio.to_thread(server.serve_forever)
+        finally:
+            server.shutdown()
+            server.server_close()
+
     def _queue_signal(self, source: dict[str, Any], message_id: int, action: str, data: dict[str, Any], unix_time: int, edit_tag: str = "") -> None:
         source_id = clean_source_id(source["id"])
         signal_id = f"{source_id}:{message_id}"
@@ -474,6 +606,53 @@ class Bridge:
             data = response.read(2_000_000)
         return parse_rss_atom(data)
 
+    def _fetch_x_source(self, source: dict[str, Any], since_id: str = "") -> list[dict[str, Any]]:
+        bearer = os.environ.get("X_BEARER_TOKEN", "").strip()
+        if not bearer:
+            raise RuntimeError("Set X_BEARER_TOKEN in bridge/.env.local")
+        user_id = str(source.get("user_id", "")).strip()
+        if not user_id.isdigit():
+            raise ValueError("X source user_id must be a numeric X account ID")
+        params = {"max_results": "100", "tweet.fields": "created_at,author_id", "exclude": "retweets,replies"}
+        if since_id:
+            params["since_id"] = since_id
+        query = urllib.parse.urlencode(params)
+        url = f"https://api.x.com/2/users/{user_id}/tweets?{query}"
+        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {bearer}", "User-Agent": "NixoSignalBridge/0.3"})
+        timeout = max(5, int(os.environ.get("NIXO_X_TIMEOUT_SECONDS", "15")))
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            data = response.read(2_000_000)
+        return parse_x_api_response(data, user_id)
+
+    async def run_x_sources(self, sources: list[dict[str, Any]]) -> None:
+        interval = max(30, int(os.environ.get("NIXO_X_POLL_SECONDS", "60")))
+        since_ids = self.state.setdefault("x_since_id", {})
+        initialized = self.state.setdefault("x_initialized", {})
+        while True:
+            for source in sources:
+                sid = clean_source_id(str(source["id"]))
+                try:
+                    entries = await asyncio.to_thread(self._fetch_x_source, source, str(since_ids.get(sid, "")))
+                    entries.sort(key=lambda item: int(item.get("unix_time", 0)))
+                    if not initialized.get(sid):
+                        if entries:
+                            since_ids[sid] = max((str(item["id"]) for item in entries), key=int)
+                        initialized[sid] = True
+                        self._save_state()
+                        log.info("X baseline loaded: %s | %d existing posts marked as seen (no backfill)", source.get("name", sid), len(entries))
+                        continue
+                    for item in entries:
+                        self.handle_message(source, int(hashlib.sha256(item["id"].encode("utf-8")).hexdigest()[:12], 16), item["text"], int(item["unix_time"]))
+                    if entries:
+                        since_ids[sid] = max((str(item["id"]) for item in entries), key=int)
+                        self._save_state()
+                        log.info("X source %s: %d new posts checked", source.get("name", sid), len(entries))
+                except (urllib.error.URLError, TimeoutError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
+                    log.warning("X poll failed for %s: %s", source.get("name", sid), exc)
+                except Exception as exc:
+                    log.exception("Unexpected X API error for %s: %s", source.get("name", sid), exc)
+            await asyncio.sleep(interval)
+
     async def run_rss_sources(self, sources: list[dict[str, Any]]) -> None:
         interval = max(15, int(os.environ.get("NIXO_RSS_POLL_SECONDS", "45")))
         seen_map = self.state.setdefault("feed_seen", {})
@@ -527,8 +706,11 @@ class Bridge:
     async def run(self) -> None:
         load_local_env()
         enabled = [s for s in self.cfg["sources"] if s.get("enabled")]
-        telegram_sources = [s for s in enabled if str(s.get("source_type", "telegram")).lower() != "rss"]
+        source_types = {str(s.get("source_type", "telegram")).lower() for s in enabled}
+        telegram_sources = [s for s in enabled if str(s.get("source_type", "telegram")).lower() == "telegram"]
         rss_sources = [s for s in enabled if str(s.get("source_type", "telegram")).lower() == "rss"]
+        x_sources = [s for s in enabled if str(s.get("source_type", "telegram")).lower() == "x"]
+        tv_sources = [s for s in enabled if str(s.get("source_type", "telegram")).lower() == "tradingview"]
         if not enabled:
             log.warning("No enabled sources in config/sources.json. Add a Telegram channel or RSS/Atom feed and restart.")
             return
@@ -595,6 +777,16 @@ class Bridge:
         if rss_sources:
             tasks.append(asyncio.create_task(self.run_rss_sources(rss_sources)))
             log.info("RSS/Atom sources enabled: %d", len(rss_sources))
+        if x_sources:
+            if not os.environ.get("X_BEARER_TOKEN", "").strip():
+                log.error("X sources are enabled, but X_BEARER_TOKEN is not configured.")
+            else:
+                tasks.append(asyncio.create_task(self.run_x_sources(x_sources)))
+                log.info("X API sources enabled: %d", len(x_sources))
+        if tv_sources:
+            tasks.append(asyncio.create_task(self.run_tradingview_webhook(tv_sources)))
+        if not tasks and source_types:
+            raise RuntimeError("No signal source could start. Check source credentials and settings.")
         if not tasks:
             raise RuntimeError("No signal source could start. Check Telegram credentials and RSS feed URLs.")
         log.info("Nixo Signal Bridge %s active. It only parses and queues signals; MT5 controls paper/live behavior.", VERSION)
@@ -658,7 +850,31 @@ def self_test() -> int:
     if feed_signal is None or (feed_signal.tp1, feed_signal.tp2, feed_signal.tp3) != (4060.0, 4070.0, 4080.0):
         print("FAIL: RSS-to-signal parsing", feed_signal)
         return 1
-    print("PASS: signal templates, GOLD alias, BE/SL/TP/CLOSE/CANCEL, RSS parser and RSS-to-signal tests")
+    tv_secret = "test-secret-value-that-is-long-enough"
+    tv_payload = json.dumps({
+        "secret": tv_secret, "source_id": "tv_test", "alert_id": "tv-alert-1",
+        "side": "BUY", "symbol": "XAUUSD", "order_kind": "MARKET", "sl": 4040, "tp1": 4060,
+    }).encode("utf-8")
+    tv_data, tv_message, _ = parse_tradingview_webhook(tv_payload, tv_secret)
+    if tv_data.get("alert_id") != "tv-alert-1" or parse_signal(tv_message, source) is None:
+        print("FAIL: TradingView webhook normalization", tv_message)
+        return 1
+    try:
+        parse_tradingview_webhook(tv_payload, "incorrect-secret")
+    except PermissionError:
+        pass
+    else:
+        print("FAIL: TradingView accepted an incorrect secret")
+        return 1
+    x_data = json.dumps({"data": [
+        {"id": "100", "author_id": "42", "text": "BUY XAUUSD NOW SL 4040 TP1 4060", "created_at": "2026-11-07T10:00:00Z"},
+        {"id": "101", "author_id": "84", "text": "BUY XAUUSD NOW SL 4040 TP1 4060", "created_at": "2026-11-07T10:01:00Z"},
+    ]}).encode("utf-8")
+    x_entries = parse_x_api_response(x_data, "42")
+    if len(x_entries) != 1 or x_entries[0]["id"] != "100" or not x_entries[0]["unix_time"]:
+        print("FAIL: X API author allowlist", x_entries)
+        return 1
+    print("PASS: parser, RSS, TradingView secret/normalization, and X author allowlist")
     return 0
 
 

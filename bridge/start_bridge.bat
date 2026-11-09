@@ -3,8 +3,8 @@ setlocal
 cd /d "%~dp0"
 if not exist ".env.local" (
   echo No .env.local found.
-  echo RSS/Atom-only sources can run without it; Telegram sources need credentials.
-  echo Copy .env.local.example to .env.local and fill Telegram credentials when needed.
+  echo RSS/Atom-only sources can run without it; Telegram, X, and TradingView need credentials.
+  echo Copy .env.local.example to .env.local and fill only the credentials for enabled sources.
   echo.
 )
 if not exist ".venv\Scripts\python.exe" (

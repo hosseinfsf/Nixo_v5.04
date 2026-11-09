@@ -177,13 +177,39 @@ CLOSE TRADE
 
 ## ۱۰) امکانات v5.04
 
+## اتصال TradingView و X
+
+Bridge از نسخهٔ فعلی برای TradingView webhook و X API v2 adapter دارد. هر دو منبع در Source Manager با حالت خاموش ساخته می‌شوند و فقط پیام‌های متنی که parser بتواند نماد مجاز، جهت، SL و حداقل یک TP را از آن استخراج کند به صف MT5 می‌روند. شروع اولیهٔ X فقط پست‌های موجود را baseline می‌کند و آن‌ها را backfill نمی‌کند.
+
+### TradingView
+
+1. در `bridge/.env.local.example` مقادیر لازم را ببین، آن را به `bridge/.env.local` کپی کن و `NIXO_TV_WEBHOOK_SECRET` را با رشتهٔ تصادفی طولانی (حداقل ۲۴ کاراکتر) پر کن. فایل `.env.local` را commit یا برای کسی ارسال نکن.
+2. در `manage_sources.bat` گزینهٔ افزودن منبع و سپس `4) TradingView webhook` را انتخاب کن؛ source ID، نمادهای مجاز و در صورت لزوم فرض تک‌نمادی را وارد کن. منبع را فقط وقتی آمادهٔ تست شدی روشن کن.
+3. Bridge روی `127.0.0.1:8765` و مسیر `/tradingview` گوش می‌دهد. TradingView نمی‌تواند این آدرس محلی را ببیند؛ یک endpoint عمومی HTTPS با reverse proxy یا tunnel امن لازم است که فقط همین مسیر را به پورت محلی بفرستد. پورت 8765 را مستقیم و بدون TLS/محافظت به اینترنت باز نکن.
+4. در TradingView Alert گزینهٔ Webhook URL را با آدرس HTTPS خودت تنظیم کن. در Message یک JSON بفرست؛ secret باید در Alert body باشد و با مقدار محلی یکی باشد:
+
+```json
+{"secret":"REPLACE_WITH_RANDOM_SECRET","source_id":"tv_xau","alert_id":"{{ticker}}-{{time}}","message":"BUY XAUUSD NOW\nSL: 4040\nTP1: 4060\nTP2: 4070"}
+```
+
+`message` باید مقادیر SL و TP واقعی استراتژی/Alert را تولید کند؛ اعداد بالا فقط نمونه‌اند. از secret یکتا استفاده کن و دسترسی تنظیمات Alert را محدود نگه دار. ارسال تکراری همان `alert_id` در هر منبع دوباره صف نمی‌شود.
+
+### X API
+
+1. در X Developer Portal دسترسی API خواندن پست‌ها و Bearer Token را از مسیر رسمی تهیه کن؛ شرایط دسترسی و نرخ درخواست به سطح دسترسی حساب X بستگی دارد.
+2. Bearer Token را فقط در `bridge/.env.local` در `X_BEARER_TOKEN` بگذار. این فایل در ignore است؛ Token را در config، اسکریپت Pine، Alert، چت یا مخزن قرار نده.
+3. در Source Manager گزینهٔ `3) X API` را بزن و **شناسهٔ عددی حساب** را وارد کن. Adapter عمداً handle را resolve یا حساب‌های دیگر را جست‌وجو نمی‌کند؛ هر منبع دقیقاً به همان author ID محدود است.
+4. نمادهای مجاز را محدود کن، منبع را ابتدا خاموش نگه دار و بعد از بررسی حساب Demo روشن کن. Bridge پست‌های جدید را با فاصلهٔ پیش‌فرض ۶۰ ثانیه می‌خواند؛ در صورت مجاز بودن API می‌توان آن را با `NIXO_X_POLL_SECONDS` تغییر داد.
+
+در هر دو روش، ابتدا `InpSignalLiveAllowed = false` نگه دار و رفتار پیام‌ها را در Paper Lab/Journal تأیید کن. این adapterها صرفاً سیگنال را به inbox مشترک `NIXO_SIG_V1` می‌فرستند؛ تضمینی برای اجرای معامله یا سود وجود ندارد.
+
 - Trading Mode سه‌حالته: MANUAL / EXTERNAL SIGNALS / STRATEGY.
 - تغییر Mode فقط ورودی‌های جدید را از مسیرهای غیرانتخابی مسدود می‌کند؛ پوزیشن‌ها، سفارش‌های معلق و SL/TP موجود دست‌نخورده باقی می‌مانند. سفارش معلق ممکن است پس از تغییر Mode اجرا شود.
 - `CLOSE NIXO POSITIONS ONLY` پوزیشن‌های Nixo را می‌بندد و Pending Orderها را حفظ می‌کند. Pending Order حفظ‌شده می‌تواند بعداً اجرا شود.
 - ثبت snapshot مدیریتی به ازای پوزیشن برای TP1/TP2/Runner/BE.
 - سقف `InpMaxOpenRiskPct` به کنترل مشترک Manual/Strategy/External ارتقا یافته است.
 - دکمه `ADVANCED REPORT` خروجی CSV از تاریخچه و پوزیشن‌های باز می‌سازد؛ داشبورد HTML آفلاین با `reporting/generate_report.bat` ساخته می‌شود.
-- منابع Telegram و RSS هم‌زمان و با enable مستقل قابل اجرا هستند. Adapter اجرایی اختصاصی X و TradingView هنوز در این نسخه نیست و باید جداگانه به `NIXO_SIG_V1` متصل شود.
+- منابع Telegram، RSS/Atom، X API و TradingView webhook با enable مستقل به صف مشترک `NIXO_SIG_V1` متصل می‌شوند.
 
 جزئیات و محدودیت‌های تست در `CHANGELOG_FA_v5.04.md` آمده است.
 
@@ -196,7 +222,7 @@ CLOSE TRADE
 - ثبت snapshot مدیریتی به ازای پوزیشن برای TP1/TP2/Runner/BE.
 - سقف `InpMaxOpenRiskPct` به کنترل مشترک Manual/Strategy/External ارتقا یافته است.
 - دکمه `ADVANCED REPORT` خروجی CSV از تاریخچه و پوزیشن‌های باز می‌سازد؛ داشبورد HTML آفلاین با `reporting/generate_report.bat` ساخته می‌شود.
-- منابع Telegram و RSS هم‌زمان و با enable مستقل قابل اجرا هستند. Adapter اجرایی اختصاصی X و TradingView هنوز در این نسخه نیست و باید جداگانه به `NIXO_SIG_V1` متصل شود.
+- منابع Telegram، RSS/Atom، X API و TradingView webhook با enable مستقل به صف مشترک `NIXO_SIG_V1` متصل می‌شوند.
 
 جزئیات و محدودیت‌های تست در `CHANGELOG_FA_v5.04.md` آمده است.
 
@@ -209,7 +235,7 @@ CLOSE TRADE
 - ثبت snapshot مدیریتی به ازای پوزیشن برای TP1/TP2/Runner/BE.
 - سقف `InpMaxOpenRiskPct` به کنترل مشترک Manual/Strategy/External ارتقا یافته است.
 - دکمه `ADVANCED REPORT` خروجی CSV از تاریخچه و پوزیشن‌های باز می‌سازد؛ داشبورد HTML آفلاین با `reporting/generate_report.bat` ساخته می‌شود.
-- منابع Telegram و RSS هم‌زمان و با enable مستقل قابل اجرا هستند. Adapter اجرایی اختصاصی X و TradingView هنوز در این نسخه نیست و باید جداگانه به `NIXO_SIG_V1` متصل شود.
+- منابع Telegram، RSS/Atom، X API و TradingView webhook با enable مستقل به صف مشترک `NIXO_SIG_V1` متصل می‌شوند.
 
 جزئیات و محدودیت‌های تست در `CHANGELOG_FA_v5.04.md` آمده است.
 
@@ -222,7 +248,7 @@ CLOSE TRADE
 - ثبت snapshot مدیریتی به ازای پوزیشن برای TP1/TP2/Runner/BE.
 - سقف `InpMaxOpenRiskPct` به کنترل مشترک Manual/Strategy/External ارتقا یافته است.
 - دکمه `ADVANCED REPORT` خروجی CSV از تاریخچه و پوزیشن‌های باز می‌سازد؛ داشبورد HTML آفلاین با `reporting/generate_report.bat` ساخته می‌شود.
-- منابع Telegram و RSS هم‌زمان و با enable مستقل قابل اجرا هستند. Adapter اجرایی اختصاصی X و TradingView هنوز در این نسخه نیست و باید جداگانه به `NIXO_SIG_V1` متصل شود.
+- منابع Telegram، RSS/Atom، X API و TradingView webhook با enable مستقل به صف مشترک `NIXO_SIG_V1` متصل می‌شوند.
 
 جزئیات و محدودیت‌های تست در `CHANGELOG_FA_v5.04.md` آمده است.
 
@@ -235,7 +261,7 @@ CLOSE TRADE
 - ثبت snapshot مدیریتی به ازای پوزیشن برای TP1/TP2/Runner/BE.
 - سقف `InpMaxOpenRiskPct` به کنترل مشترک Manual/Strategy/External ارتقا یافته است.
 - دکمه `ADVANCED REPORT` خروجی CSV از تاریخچه و پوزیشن‌های باز می‌سازد؛ داشبورد HTML آفلاین با `reporting/generate_report.bat` ساخته می‌شود.
-- منابع Telegram و RSS هم‌زمان و با enable مستقل قابل اجرا هستند. Adapter اجرایی اختصاصی X و TradingView هنوز در این نسخه نیست و باید جداگانه به `NIXO_SIG_V1` متصل شود.
+- منابع Telegram، RSS/Atom، X API و TradingView webhook با enable مستقل به صف مشترک `NIXO_SIG_V1` متصل می‌شوند.
 
 جزئیات و محدودیت‌های تست در `CHANGELOG_FA_v5.04.md` آمده است.
 
@@ -248,7 +274,7 @@ CLOSE TRADE
 - ثبت snapshot مدیریتی به ازای پوزیشن برای TP1/TP2/Runner/BE.
 - سقف `InpMaxOpenRiskPct` به کنترل مشترک Manual/Strategy/External ارتقا یافته است.
 - دکمه `ADVANCED REPORT` خروجی CSV از تاریخچه و پوزیشن‌های باز می‌سازد؛ داشبورد HTML آفلاین با `reporting/generate_report.bat` ساخته می‌شود.
-- منابع Telegram و RSS هم‌زمان و با enable مستقل قابل اجرا هستند. Adapter اجرایی اختصاصی X و TradingView هنوز در این نسخه نیست و باید جداگانه به `NIXO_SIG_V1` متصل شود.
+- منابع Telegram، RSS/Atom، X API و TradingView webhook با enable مستقل به صف مشترک `NIXO_SIG_V1` متصل می‌شوند.
 
 جزئیات و محدودیت‌های تست در `CHANGELOG_FA_v5.04.md` آمده است.
 
@@ -261,7 +287,7 @@ CLOSE TRADE
 - ثبت snapshot مدیریتی به ازای پوزیشن برای TP1/TP2/Runner/BE.
 - سقف `InpMaxOpenRiskPct` به کنترل مشترک Manual/Strategy/External ارتقا یافته است.
 - دکمه `ADVANCED REPORT` خروجی CSV از تاریخچه و پوزیشن‌های باز می‌سازد؛ داشبورد HTML آفلاین با `reporting/generate_report.bat` ساخته می‌شود.
-- منابع Telegram و RSS هم‌زمان و با enable مستقل قابل اجرا هستند. Adapter اجرایی اختصاصی X و TradingView هنوز در این نسخه نیست و باید جداگانه به `NIXO_SIG_V1` متصل شود.
+- منابع Telegram، RSS/Atom، X API و TradingView webhook با enable مستقل به صف مشترک `NIXO_SIG_V1` متصل می‌شوند.
 
 جزئیات و محدودیت‌های تست در `CHANGELOG_FA_v5.04.md` آمده است.
 
@@ -274,7 +300,7 @@ CLOSE TRADE
 - ثبت snapshot مدیریتی به ازای پوزیشن برای TP1/TP2/Runner/BE.
 - سقف `InpMaxOpenRiskPct` به کنترل مشترک Manual/Strategy/External ارتقا یافته است.
 - دکمه `ADVANCED REPORT` خروجی CSV از تاریخچه و پوزیشن‌های باز می‌سازد؛ داشبورد HTML آفلاین با `reporting/generate_report.bat` ساخته می‌شود.
-- منابع Telegram و RSS هم‌زمان و با enable مستقل قابل اجرا هستند. Adapter اجرایی اختصاصی X و TradingView هنوز در این نسخه نیست و باید جداگانه به `NIXO_SIG_V1` متصل شود.
+- منابع Telegram، RSS/Atom، X API و TradingView webhook با enable مستقل به صف مشترک `NIXO_SIG_V1` متصل می‌شوند.
 
 جزئیات و محدودیت‌های تست در `CHANGELOG_FA_v5.04.md` آمده است.
 
@@ -287,7 +313,7 @@ CLOSE TRADE
 - ثبت snapshot مدیریتی به ازای پوزیشن برای TP1/TP2/Runner/BE.
 - سقف `InpMaxOpenRiskPct` به کنترل مشترک Manual/Strategy/External ارتقا یافته است.
 - دکمه `ADVANCED REPORT` خروجی CSV از تاریخچه و پوزیشن‌های باز می‌سازد؛ داشبورد HTML آفلاین با `reporting/generate_report.bat` ساخته می‌شود.
-- منابع Telegram و RSS هم‌زمان و با enable مستقل قابل اجرا هستند. Adapter اجرایی اختصاصی X و TradingView هنوز در این نسخه نیست و باید جداگانه به `NIXO_SIG_V1` متصل شود.
+- منابع Telegram، RSS/Atom، X API و TradingView webhook با enable مستقل به صف مشترک `NIXO_SIG_V1` متصل می‌شوند.
 
 جزئیات و محدودیت‌های تست در `CHANGELOG_FA_v5.04.md` آمده است.
 
@@ -300,7 +326,7 @@ CLOSE TRADE
 - ثبت snapshot مدیریتی به ازای پوزیشن برای TP1/TP2/Runner/BE.
 - سقف `InpMaxOpenRiskPct` به کنترل مشترک Manual/Strategy/External ارتقا یافته است.
 - دکمه `ADVANCED REPORT` خروجی CSV از تاریخچه و پوزیشن‌های باز می‌سازد؛ داشبورد HTML آفلاین با `reporting/generate_report.bat` ساخته می‌شود.
-- منابع Telegram و RSS هم‌زمان و با enable مستقل قابل اجرا هستند. Adapter اجرایی اختصاصی X و TradingView هنوز در این نسخه نیست و باید جداگانه به `NIXO_SIG_V1` متصل شود.
+- منابع Telegram، RSS/Atom، X API و TradingView webhook با enable مستقل به صف مشترک `NIXO_SIG_V1` متصل می‌شوند.
 
 جزئیات و محدودیت‌های تست در `CHANGELOG_FA_v5.04.md` آمده است.
 
@@ -313,6 +339,6 @@ CLOSE TRADE
 - ثبت snapshot مدیریتی به ازای پوزیشن برای TP1/TP2/Runner/BE.
 - سقف `InpMaxOpenRiskPct` به کنترل مشترک Manual/Strategy/External ارتقا یافته است.
 - دکمه `ADVANCED REPORT` خروجی CSV از تاریخچه و پوزیشن‌های باز می‌سازد؛ داشبورد HTML آفلاین با `reporting/generate_report.bat` ساخته می‌شود.
-- منابع Telegram و RSS هم‌زمان و با enable مستقل قابل اجرا هستند. Adapter اجرایی اختصاصی X و TradingView هنوز در این نسخه نیست و باید جداگانه به `NIXO_SIG_V1` متصل شود.
+- منابع Telegram، RSS/Atom، X API و TradingView webhook با enable مستقل به صف مشترک `NIXO_SIG_V1` متصل می‌شوند.
 
 جزئیات و محدودیت‌های تست در `CHANGELOG_FA_v5.04.md` آمده است.
