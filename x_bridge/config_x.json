@@ -1,0 +1,25 @@
+{
+  "settings": {
+    "poll_interval_seconds": 25,
+    "max_posts_per_account": 8,
+    "use_ai_fallback": true,
+    "ai_provider": "groq",
+    "default_symbols": ["XAUUSD", "GOLD"]
+  },
+  "accounts": [
+    {
+      "username": "tradewithjesse",
+      "user_id": "",
+      "enabled": true,
+      "allowed_symbols": ["XAUUSD", "GOLD"],
+      "note": "حساب اصلی سیگنال طلا - فعال"
+    },
+    {
+      "username": "xauusd_signal_0",
+      "user_id": "",
+      "enabled": false,
+      "allowed_symbols": ["XAUUSD", "EURUSD"],
+      "note": "حساب دوم - فعلا خاموش"
+    }
+  ]
+}

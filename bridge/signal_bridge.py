@@ -730,13 +730,25 @@ class Bridge:
                     await client.start()
                     for source in telegram_sources:
                         channel = str(source.get("channel", "")).strip().lstrip("@")
-                        if not channel:
+                        channel_id = source.get("channel_id")
+                        if not channel and not channel_id:
                             log.warning("Skipping Telegram source with missing channel: %s", source.get("id"))
                             continue
                         try:
-                            entity = await client.get_entity(channel)
+                            if channel_id:
+                                target_id = int(channel_id)
+                                entity = None
+                                async for dialog in client.iter_dialogs():
+                                    if getattr(dialog.entity, "id", None) == target_id:
+                                        entity = dialog.entity
+                                        break
+                                if entity is None:
+                                    raise ValueError(f"channel ID {target_id} is not in the account's dialogs")
+                            else:
+                                entity = await client.get_entity(channel)
                         except Exception as exc:
-                            log.error("Cannot access @%s (%s): %s", channel, source.get("id"), exc)
+                            endpoint = f"channel ID {channel_id}" if channel_id else f"@{channel}"
+                            log.error("Cannot access %s (%s): %s", endpoint, source.get("id"), exc)
                             continue
 
                         async def on_new(event, src=source):
@@ -767,7 +779,8 @@ class Bridge:
 
                         client.add_event_handler(on_new, events.NewMessage(chats=entity, incoming=True))
                         client.add_event_handler(on_edit, events.MessageEdited(chats=entity, incoming=True))
-                        log.info("Listening Telegram: %s (@%s) | parser=%s", source.get("name", source["id"]), channel, source.get("parser", "standard"))
+                        endpoint = f"channel ID {channel_id}" if channel_id else f"@{channel}"
+                        log.info("Listening Telegram: %s (%s) | parser=%s", source.get("name", source["id"]), endpoint, source.get("parser", "standard"))
                     tasks.append(asyncio.create_task(client.run_until_disconnected()))
                 except ImportError:
                     log.error("Telegram sources enabled but Telethon is missing. Install bridge/requirements.txt.")

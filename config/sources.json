@@ -1,5 +1,66 @@
 {
   "session_name": "nixo_telegram",
   "mt5_common_files": "",
-  "sources": []
+  "sources": [
+    {
+      "id": "private_1877259323",
+      "name": "Telegram 1877259323",
+      "source_type": "telegram",
+      "enabled": true,
+      "parser": "standard",
+      "allowed_symbols": [
+        "XAUUSD"
+      ],
+      "assume_single_symbol": false,
+      "channel_id": 1877259323
+    },
+    {
+      "id": "tradingfanatic77",
+      "name": "Trading Fanatic 77",
+      "source_type": "telegram",
+      "enabled": true,
+      "parser": "standard",
+      "allowed_symbols": [
+        "XAUUSD"
+      ],
+      "assume_single_symbol": false,
+      "channel": "Tradingfanatic77"
+    },
+    {
+      "id": "private_1963362260",
+      "name": "Telegram 1963362260",
+      "source_type": "telegram",
+      "enabled": true,
+      "parser": "standard",
+      "allowed_symbols": [
+        "XAUUSD"
+      ],
+      "assume_single_symbol": false,
+      "channel_id": 1963362260
+    },
+    {
+      "id": "forex_snip",
+      "name": "Forex Snip",
+      "source_type": "telegram",
+      "enabled": true,
+      "parser": "standard",
+      "allowed_symbols": [
+        "XAUUSD"
+      ],
+      "assume_single_symbol": false,
+      "channel": "forex_snip"
+    },
+    {
+      "id": "prime_fx_accadmy97",
+      "name": "prime_fx_accadmy97",
+      "source_type": "telegram",
+      "enabled": true,
+      "parser": "standard",
+      "allowed_symbols": [
+        "XAUUSD"
+      ],
+      "assume_single_symbol": false,
+      "channel": "prime_fx_accadmy97"
+    }
+  ]
 }

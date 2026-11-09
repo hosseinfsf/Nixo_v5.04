@@ -1,5 +1,8 @@
 # Claude Code — project context
 
+
+
+
 <!-- cloude-code-toolbox:token-optimization-begin -->
 
 ### Token Optimization (Claude Code ToolBox)
@@ -15,11 +18,12 @@ _Active level: concise_
 - Do not read files matching `.claudeignore` patterns unless explicitly asked.
 
 <!-- cloude-code-toolbox:token-optimization-end -->
+
 <!-- cloude-code-toolbox:mcp-skills-awareness-begin -->
 
 ### MCP & Skills awareness (Claude Code ToolBox)
 
-_Last synced: 2026-11-07T17:53:16.128Z._
+_Last synced: 2026-11-09T06:29:51.871Z._
 
 - **Full report:** `.claude/cloude-code-toolbox-mcp-skills-awareness.md` in this workspace (auto-overwritten on each scan). Use it as ground truth for configured servers and skill folders.
 - **MCP:** For **live tools** in Claude Code, enable the matching server via `/mcp`. Servers are configured in `~/.claude.json` (user) and `.mcp.json` (project).
