@@ -339,6 +339,9 @@ bool     g_PortfolioMode = false;
 bool     g_HedgeEnabled = false;
 bool     g_ManualMode = false;
 bool     g_SignalLiveEnabled = false;
+bool     g_ControlManaged = false;
+bool     g_ControlEnabled = false;
+datetime g_LastControlStatusErrorTime = 0;
 bool     g_ManualDeskOpen = false;
 int      g_ManualDeskX = -1;
 int      g_ManualDeskY = -1;
@@ -2124,7 +2127,8 @@ void SignalPendingExpirySettings(ENUM_ORDER_TYPE_TIME &timeType,datetime &expira
 
 void SignalExecuteLive(string signalId,string sourceId,int side,int kind,double entry,double sl,double tp1,double tp2,double tp3)
 {
-   if(g_TradingMode!=NIXO_MODE_EXTERNAL || g_EntriesPaused || !g_SignalLiveEnabled || !InpSignalLiveAllowed) return;
+   if(g_TradingMode!=NIXO_MODE_EXTERNAL || g_EntriesPaused || !g_SignalLiveEnabled || !InpSignalLiveAllowed ||
+      (g_ControlManaged && !g_ControlEnabled)) return;
    if(g_Stopped || g_DailyStopped || !TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) || !MQLInfoInteger(MQL_TRADE_ALLOWED) || !AccountInfoInteger(ACCOUNT_TRADE_ALLOWED))
    { Print("SIGNAL LIVE blocked: terminal/account protection or trading permission."); return; }
    if(AccountInfoInteger(ACCOUNT_MARGIN_MODE)!=ACCOUNT_MARGIN_MODE_RETAIL_HEDGING)
@@ -2414,6 +2418,114 @@ bool ParseBridgeSignalLine(string line, string &signalId, string &sourceId, stri
    return false;
 }
 
+bool ControlJsonBool(string json,string key,bool &value)
+{
+   string needle="\""+key+"\"";
+   int keyPos=StringFind(json,needle);
+   if(keyPos<0) return false;
+   int colon=StringFind(json,":",keyPos+StringLen(needle));
+   if(colon<0) return false;
+   int pos=colon+1;
+   while(pos<StringLen(json))
+   {
+      ushort ch=StringGetCharacter(json,pos);
+      if(ch!=' ' && ch!='\t' && ch!='\r' && ch!='\n') break;
+      pos++;
+   }
+   string token=StringSubstr(json,pos,5);
+   if(StringSubstr(token,0,4)=="true") { value=true; return true; }
+   if(token=="false") { value=false; return true; }
+   return false;
+}
+
+bool ControlJsonStringEquals(string json,string key,string expected)
+{
+   string needle="\""+key+"\"";
+   int keyPos=StringFind(json,needle);
+   if(keyPos<0) return false;
+   int colon=StringFind(json,":",keyPos+StringLen(needle));
+   if(colon<0) return false;
+   int quote=StringFind(json,"\"",colon+1);
+   if(quote<0) return false;
+   int endQuote=StringFind(json,"\"",quote+1);
+   if(endQuote<0) return false;
+   return StringSubstr(json,quote+1,endQuote-quote-1)==expected;
+}
+
+void ReadExternalControl()
+{
+   int h=FileOpen("NixoBridge\\control.json",FILE_READ|FILE_TXT|FILE_ANSI|FILE_COMMON);
+   if(h==INVALID_HANDLE)
+   {
+      if(g_ControlManaged)
+      {
+         if(g_ControlEnabled) Print("CONTROL CENTER | control file unavailable; external signal intake disabled.");
+         g_ControlEnabled=false;
+         g_SignalLiveEnabled=false;
+      }
+      return;
+   }
+   string json=FileReadString(h);
+   FileClose(h);
+   g_ControlManaged=true;
+
+   bool systemEnabled=false,acceptSignals=false,demoOnly=false;
+   bool valid=ControlJsonBool(json,"system_enabled",systemEnabled) &&
+              ControlJsonBool(json,"accept_new_signals",acceptSignals) &&
+              ControlJsonBool(json,"demo_only",demoOnly) &&
+              ControlJsonStringEquals(json,"trading_mode","EXTERNAL");
+   bool demoAccount=(AccountInfoInteger(ACCOUNT_TRADE_MODE)==ACCOUNT_TRADE_MODE_DEMO);
+   bool enabled=(valid && systemEnabled && acceptSignals && demoOnly && demoAccount);
+   bool changed=(enabled!=g_ControlEnabled);
+   g_ControlEnabled=enabled;
+
+   if(enabled && (changed || g_TradingMode!=NIXO_MODE_EXTERNAL))
+   {
+      SetTradingMode(NIXO_MODE_EXTERNAL);
+      if(changed) Print("CONTROL CENTER | ON | demo account confirmed | EXTERNAL signal intake enabled.");
+   }
+   else if(!enabled)
+   {
+      if(g_SignalLiveEnabled || changed)
+         PrintFormat("CONTROL CENTER | OFF | external intake blocked | demo=%s | valid command=%s",
+                     demoAccount?"YES":"NO",valid?"YES":"NO");
+      g_SignalLiveEnabled=false;
+   }
+}
+
+void WriteEAStatus()
+{
+   string temporaryPath="NixoBridge\\ea_status.tmp";
+   int h=FileOpen(temporaryPath,FILE_WRITE|FILE_TXT|FILE_ANSI|FILE_COMMON);
+   if(h==INVALID_HANDLE)
+   {
+      if(TimeCurrent()-g_LastControlStatusErrorTime>=60)
+      {
+         Print("CONTROL CENTER | cannot write NixoBridge\\ea_status.json; check MT5 Common Files permissions.");
+         g_LastControlStatusErrorTime=TimeCurrent();
+      }
+      return;
+   }
+   bool demoAccount=(AccountInfoInteger(ACCOUNT_TRADE_MODE)==ACCOUNT_TRADE_MODE_DEMO);
+   string mode=(g_TradingMode==NIXO_MODE_EXTERNAL?"EXTERNAL":(g_TradingMode==NIXO_MODE_MANUAL?"MANUAL":"STRATEGY"));
+   string json=StringFormat("{\"ea_version\":\"5.05\",\"running\":true,\"controller_managed\":%s,\"system_enabled\":%s,\"accept_new_signals\":%s,\"demo_account\":%s,\"signal_lab_enabled\":%s,\"signal_live_enabled\":%s,\"trading_mode\":\"%s\",\"symbol\":\"%s\",\"heartbeat\":%I64d}\n",
+      g_ControlManaged?"true":"false",g_ControlEnabled?"true":"false",
+      g_ControlEnabled?"true":"false",demoAccount?"true":"false",
+      InpSignalLabEnabled?"true":"false",g_SignalLiveEnabled?"true":"false",
+      mode,_Symbol,(long)TimeGMT());
+   FileWriteString(h,json);
+   FileClose(h);
+   if(!FileMove(temporaryPath,FILE_COMMON,"NixoBridge\\ea_status.json",FILE_COMMON|FILE_REWRITE))
+   {
+      FileDelete(temporaryPath,FILE_COMMON);
+      if(TimeCurrent()-g_LastControlStatusErrorTime>=60)
+      {
+         Print("CONTROL CENTER | cannot publish ea_status.json; check MT5 Common Files permissions.");
+         g_LastControlStatusErrorTime=TimeCurrent();
+      }
+   }
+}
+
 void ProcessOneSignalFile(string fileName)
 {
    string path=InpSignalInboxFolder+fileName;
@@ -2468,13 +2580,17 @@ void ProcessSignalInbox()
    long handle=FileFindFirst(InpSignalInboxFolder+"*.sig",fileName,FILE_COMMON);
    if(handle==INVALID_HANDLE) return;
    int processed=0;
+   bool discard=(g_ControlManaged && !g_ControlEnabled);
    do
    {
-      ProcessOneSignalFile(fileName);
+      if(discard) FileDelete(InpSignalInboxFolder+fileName,FILE_COMMON);
+      else ProcessOneSignalFile(fileName);
       processed++;
       if(processed>=50) break;
    } while(FileFindNext(handle,fileName));
    FileFindClose(handle);
+   if(discard && processed>0)
+      PrintFormat("CONTROL CENTER | discarded %d queued event(s) while OFF; existing positions/orders were not changed.",processed);
 }
 void UpdateSignalPaperTrades()
 {
@@ -3344,6 +3460,8 @@ void OnDeinit(const int reason)
 //==================================================================
 void OnTimer()
 {
+   ReadExternalControl();
+   WriteEAStatus();
    ReadAIStatus();
    WriteAIMarketSnapshot();
    ProcessSignalInbox();

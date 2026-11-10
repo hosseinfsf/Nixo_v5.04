@@ -29,6 +29,11 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Optional, Any
 
+try:
+    from .control_protocol import control_enabled, load_control
+except ImportError:
+    from control_protocol import control_enabled, load_control
+
 APP_NAME = "Nixo Signal Bridge"
 VERSION = "0.2.0"
 ROOT = Path(__file__).resolve().parent
@@ -412,10 +417,63 @@ class Bridge:
         self.common_files = self._resolve_common_files(self.cfg)
         self.inbox = self.common_files / "NixoBridge" / "inbox"
         self.review = self.common_files / "NixoBridge" / "review"
+        self.control_path = self.common_files / "NixoBridge" / "control.json"
+        self.status_path = self.common_files / "NixoBridge" / "bridge_status.json"
         self.events_log = self.common_files / "NixoBridge" / "bridge_events.csv"
         self.inbox.mkdir(parents=True, exist_ok=True)
         self.review.mkdir(parents=True, exist_ok=True)
         self.state = self._load_state()
+        self._active_source_count = 0
+        self._controller_seen = False
+
+    def signal_intake_enabled(self) -> bool:
+        try:
+            control = load_control(self.control_path)
+        except (OSError, ValueError) as exc:
+            log.error("Cannot read Control Center state; signal intake is disabled: %s", exc)
+            return False
+        if control is None:
+            return not self._controller_seen
+        self._controller_seen = True
+        if not control_enabled(control):
+            return False
+        try:
+            ea_status = json.loads(
+                (self.common_files / "NixoBridge" / "ea_status.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            heartbeat = int(ea_status.get("heartbeat", 0))
+        except (OSError, ValueError, TypeError) as exc:
+            log.error("Cannot verify fresh Demo EA status; signal intake is disabled: %s", exc)
+            return False
+        return (
+            ea_status.get("demo_account") is True
+            and ea_status.get("system_enabled") is True
+            and ea_status.get("trading_mode") == "EXTERNAL"
+            and 0 <= time.time() - heartbeat <= 15
+        )
+
+    def write_status(self, running: bool) -> None:
+        try:
+            control = load_control(self.control_path)
+            status = {
+                "running": running,
+                "system_enabled": (
+                    control_enabled(control) if control is not None else None
+                ),
+                "active_sources": self._active_source_count,
+                "last_heartbeat": int(time.time()),
+            }
+            self.status_path.parent.mkdir(parents=True, exist_ok=True)
+            temporary_path = self.status_path.with_suffix(".tmp")
+            temporary_path.write_text(
+                json.dumps(status, separators=(",", ":")) + "\n",
+                encoding="utf-8",
+            )
+            os.replace(temporary_path, self.status_path)
+        except (OSError, ValueError) as exc:
+            log.error("Could not publish bridge status: %s", exc)
 
     @staticmethod
     def _resolve_common_files(cfg: dict[str, Any]) -> Path:
@@ -566,6 +624,9 @@ class Bridge:
         self._save_state()
 
     def handle_message(self, source: dict[str, Any], message_id: int, text: str, unix_time: int, edited: bool = False, media_path: Optional[Path] = None) -> None:
+        if not self.signal_intake_enabled():
+            log.info("Control Center is OFF; ignored incoming message from source=%s", source.get("id", "unknown"))
+            return
         source_id = clean_source_id(source["id"])
         parsed = parse_signal(text, source)
         if parsed:
@@ -706,6 +767,7 @@ class Bridge:
     async def run(self) -> None:
         load_local_env()
         enabled = [s for s in self.cfg["sources"] if s.get("enabled")]
+        self._active_source_count = len(enabled)
         source_types = {str(s.get("source_type", "telegram")).lower() for s in enabled}
         telegram_sources = [s for s in enabled if str(s.get("source_type", "telegram")).lower() == "telegram"]
         rss_sources = [s for s in enabled if str(s.get("source_type", "telegram")).lower() == "rss"]
@@ -716,7 +778,7 @@ class Bridge:
             return
 
         tasks: list[asyncio.Task[Any]] = []
-        client = None
+        client: Any = None
         if telegram_sources:
             api_id = os.environ.get("TELEGRAM_API_ID") or str(self.cfg.get("telegram_api_id", "")).strip()
             api_hash = os.environ.get("TELEGRAM_API_HASH", "").strip()
@@ -803,9 +865,55 @@ class Bridge:
         if not tasks:
             raise RuntimeError("No signal source could start. Check Telegram credentials and RSS feed URLs.")
         log.info("Nixo Signal Bridge %s active. It only parses and queues signals; MT5 controls paper/live behavior.", VERSION)
+
+        async def publish_heartbeat() -> None:
+            while True:
+                await asyncio.to_thread(self.write_status, True)
+                await asyncio.sleep(5)
+
+        async def monitor_control() -> None:
+            await asyncio.sleep(2)
+            while True:
+                try:
+                    control = load_control(self.control_path)
+                except (OSError, ValueError) as exc:
+                    log.error("Control state unreadable; stopping Telegram Bridge: %s", exc)
+                    control = {}
+                if control is None and self._controller_seen:
+                    log.error("Control file disappeared; stopping Telegram Bridge.")
+                    control = {}
+                if control is not None:
+                    self._controller_seen = True
+                if control is not None and not control_enabled(control):
+                    log.info("Control Center OFF; disconnecting signal sources.")
+                    if client is not None:
+                        await client.disconnect()
+                    for task in tasks:
+                        task.cancel()
+                    return
+                if control is not None and not self.signal_intake_enabled():
+                    log.error("Demo EA heartbeat is missing, stale, or no longer permitted; stopping signal sources.")
+                    if client is not None:
+                        await client.disconnect()
+                    for task in tasks:
+                        task.cancel()
+                    return
+                await asyncio.sleep(1)
+
+        heartbeat = asyncio.create_task(publish_heartbeat())
+        control_monitor = asyncio.create_task(monitor_control())
         try:
             await asyncio.gather(*tasks)
+        except asyncio.CancelledError:
+            if not control_monitor.done() or control_monitor.cancelled() or control_monitor.exception() is not None:
+                raise
         finally:
+            heartbeat.cancel()
+            control_monitor.cancel()
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(heartbeat, control_monitor, *tasks, return_exceptions=True)
+            await asyncio.to_thread(self.write_status, False)
             if client is not None:
                 await client.disconnect()
 
