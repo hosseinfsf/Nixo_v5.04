@@ -1,6 +1,6 @@
 # Claude Code ToolBox — MCP & Skills awareness
 
-_Generated: 2026-11-09T06:29:30.096Z_
+_Generated: 2026-11-10T08:29:26.186Z_
 
 ## How to use this report
 
@@ -21,9 +21,11 @@ _No active workspace servers in mcp.json._
 
 ## MCP — user profile
 
-- **C:\Users\Behnam\.claude.json** — _File missing_
+- **C:\Users\Behnam\.claude.json** — _File exists — servers defined_
 
-_No active user-scoped servers in mcp.json._
+| Server id | Kind | Detail |
+|-----------|------|--------|
+| dart | stdio | dart mcp-server --experimental-mcp-server --force-roots-fallback |
 
 ## Skills (local `SKILL.md` folders)
 
