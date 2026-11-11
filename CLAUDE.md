@@ -7,6 +7,10 @@
 
 
 
+
+
+
+
 <!-- cloude-code-toolbox:token-optimization-begin -->
 
 ### Token Optimization (Claude Code ToolBox)
@@ -27,7 +31,7 @@ _Active level: concise_
 
 ### MCP & Skills awareness (Claude Code ToolBox)
 
-_Last synced: 2026-11-10T08:29:30.970Z._
+_Last synced: 2026-11-10T16:58:32.388Z._
 
 - **Full report:** `.claude/cloude-code-toolbox-mcp-skills-awareness.md` in this workspace (auto-overwritten on each scan). Use it as ground truth for configured servers and skill folders.
 - **MCP:** For **live tools** in Claude Code, enable the matching server via `/mcp`. Servers are configured in `~/.claude.json` (user) and `.mcp.json` (project).
@@ -54,7 +58,7 @@ _None found (or no workspace open)._
 
 #### User skills
 
-_None found._
+- **skill-creator** — `C:\Users\Behnam\.claude\skills\skill-creator` — Create new skills, modify and improve existing skills. Use when users want to create a skill from scratch, edit, or optimize an existing skill.
 
 <!-- cloude-code-toolbox:mcp-skills-awareness-end -->
 <!-- claude-code-memory-bank:begin -->

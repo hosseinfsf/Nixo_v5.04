@@ -1,6 +1,6 @@
 # Claude Code ToolBox — MCP & Skills awareness
 
-_Generated: 2026-11-10T08:29:26.186Z_
+_Generated: 2026-11-10T16:58:31.568Z_
 
 ## How to use this report
 
@@ -35,7 +35,8 @@ _None found (or no workspace open)._
 
 ### User-scoped
 
-_None found._
+- **skill-creator** — `C:\Users\Behnam\.claude\skills\skill-creator`
+  - Create new skills, modify and improve existing skills. Use when users want to create a skill from scratch, edit, or optimize an existing skill.
 
 ---
 
