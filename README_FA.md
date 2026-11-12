@@ -1,4 +1,4 @@
-# Nixo v5.04 — Trading Modes + Advanced Analytics + Telegram Dual Roulette
+# Nixo v5.05 — Trading Modes + Advanced Analytics + Dual-Language Themes
 
 این بسته برای ادامه توسعه Nixo و دریافت سیگنال متنی از کانال‌های تلگرام ساخته شده است. پل Python فقط پیام را می‌خواند و به صف مشترک MT5 می‌نویسد؛ **خود اکسپرت تصمیم می‌گیرد پیام را در Paper Lab آزمایش کند یا پس از فعال‌سازی صریح کاربر، سفارش واقعی بفرستد.**
 
@@ -13,6 +13,23 @@
 - وضعیت رولت هر کانال جداگانه ذخیره می‌شود؛ سقف پوزیشن‌ها و سقف ریسک، محدودیت مشترک حساب هستند.
 - حدضرر روی سرور بروکر می‌ماند؛ TPها به‌صورت مرحله‌ای توسط اکسپرت اجرا می‌شوند تا TP3 کل حجم را ناخواسته نبندد.
 - بعد از TP3، در صورت امکان تقسیم حجم، ۱۲٫۵٪ باقی‌مانده Runner می‌شود و با ATR Trailing مدیریت می‌شود.
+- پنل از زبان انگلیسی/فارسی و تم خودکار/روز/شب پشتیبانی می‌کند؛ زبان و تم از خود پنل قابل تغییرند.
+
+## Nixo Control Center — نسخه اولیه
+
+برای راه‌اندازی از ریشه پروژه:
+
+1. یک‌بار `setup_bridge.bat` را اجرا کن تا محیط Python مخصوص Bridge ساخته و Telethon نصب شود.
+2. فایل `bridge/.env.local` را باز کن و `TELEGRAM_API_ID` و `TELEGRAM_API_HASH` را وارد کن. اگر از قبل این فایل را داری، آن را جایگزین نکن.
+3. سپس `run_control_center.bat` را اجرا کن.
+
+این دو فایل از همان محیط Python استفاده می‌کنند؛ اجرای Control Center با Python دیگری ممکن است باعث شود Bridge کتابخانه Telethon را پیدا نکند.
+
+این نسخه وضعیت EA و Bridge را از `MT5\Common\Files\NixoBridge` می‌خواند و افزودن، ویرایش، روشن/خاموش و حذف منبع‌های تلگرام را فراهم می‌کند. در اولین اجرا فرمان `OFF` ثبت می‌شود. برای روشن‌کردن سیستم باید EA جدید روی Demo فعال باشد و heartbeat تازه بفرستد؛ سپس برنامه Bridge را اجرا و فرمان `EXTERNAL` را ثبت می‌کند. مسیر Common Files از `MT5_COMMON_FILES`، تنظیمات Bridge یا مسیر پیش‌فرض MT5 گرفته می‌شود.
+
+`OFF` ورودی سیگنال جدید را می‌بندد و صف سیگنال‌های ورودی را کنار می‌گذارد؛ پوزیشن‌های باز، Pending Orderها، SL/TP و مدیریت قبلی EA را تغییر نمی‌دهد. اگر حساب Demo تأیید نشود یا heartbeat EA کهنه باشد، Bridge دریافت را متوقف می‌کند. اطلاعات ورود و Session تلگرام همچنان محلی می‌مانند.
+
+برای استفاده، سورس MQ5 به‌روزشده را در MetaEditor کامپایل و EA را دوباره روی چارت بارگذاری کنید. نصب/به‌روزرسانی خودکار EA، ورود اولیه تلگرام از داخل فرم گرافیکی و بسته‌بندی EXE هنوز در این نسخه پیاده نشده‌اند؛ ورود اولیه Telethon ممکن است پنجره کنسول نشان دهد.
 
 ## ۱) پیش‌نیازها
 
@@ -29,7 +46,7 @@
 4. در پوشه `bridge` فایل `.env.local.example` را به `.env.local` کپی کن.
 5. `TELEGRAM_API_ID` و `TELEGRAM_API_HASH` را در `.env.local` قرار بده.
 
-این حساب باید از قبل عضو کانال خصوصی موردنظر باشد یا به کانال عمومی دسترسی داشته باشد. نسخه فعلی Source Manager نام کاربری کانال عمومی را می‌گیرد؛ لینک دعوت خصوصی بدون username در این نسخه به‌صورت خودکار resolve نمی‌شود.
+این حساب باید از قبل عضو کانال خصوصی موردنظر باشد یا به کانال عمومی دسترسی داشته باشد. Source Manager نام کاربری کانال عمومی یا شناسه عددی کانال خصوصی را می‌پذیرد. لینک دعوت خصوصی به‌تنهایی resolve نمی‌شود؛ ابتدا با همان حساب وارد کانال شو و سپس شناسه عددی آن را وارد کن.
 
 **هشدار امنیتی:** کد ورود تلگرام، رمز دومرحله‌ای، API HASH یا فایل `nixo_telegram.session` را برای هیچ‌کس ارسال نکن. فایل Session حاوی کلید مجوز ورود است و هرکس به آن دسترسی داشته باشد می‌تواند به حساب تلگرام وارد شود. این اطلاعات فقط روی کامپیوتر خودت بمانند.
 
@@ -38,7 +55,7 @@
 1. وارد پوشه `bridge` شو.
 2. فایل `manage_sources.bat` را اجرا کن.
 3. گزینه `2) Add` و سپس `1) Telegram channel` را انتخاب کن.
-4. نام نمایشی دلخواه و username کانال را وارد کن (بدون `@`).
+4. نام نمایشی دلخواه و username کانال را (با یا بدون `@`) یا شناسه عددی کانال خصوصی را وارد کن. برای کانال خصوصی، ابتدا با همان حساب تلگرام عضو کانال شو.
 5. Allowed symbols را مثلاً `XAUUSD` بگذار.
 6. اگر کانال نماد را در متن پیام نمی‌نویسد، فقط در صورتی `Assume this source's only symbol if ticker is omitted` را Yes کن که کانال واقعاً فقط همان نماد را ارسال می‌کند.
 7. برای `Enable this source now?` پاسخ Yes بده.
@@ -63,43 +80,17 @@
 py -3 signal_bridge.py --self-test
 ```
 
-## ۵) کنترل‌سنتر (Control Center) — کلید ON/OFF و مدیریت منابع
+## ۵) نصب اکسپرت در MT5
 
-کنترل‌سنتر یک رابط Tkinter است که کلید **master ON/OFF**، فعال/غیرفعال کردن هر منبع (کانال تلگرام یا فید RSS/Atom)، بررسی سلامت (health) و ورود به تلگرام را مدیریت می‌کند. کد آن در پوشه `control_center/` قرار دارد.
-
-### ۵.۱) راه‌اندازی کنترل‌سنتر
-1. وارد پوشه `control_center` شو.
-2. فایل `start_control_center.bat` را اجرا کن. پنجره Tkinter باز می‌شود.
-3. دکمه **MASTER OFF** حالت پیش‌فرض است. با زدن **MASTER ON**، فایل `control.json` در Common Files نوشته می‌شود و دریافت سیگنال جدید از طریق تلگرام فعال می‌شود.
-4. با زدن **MASTER OFF**، هیچ سفارش جدیدی از طریق تلگرام ثبت نمی‌شود؛ پوزیشن‌ها و سفارش‌های معلق موجود دست‌نخورده می‌مانند.
-
-### ۵.۲) مدیریت منابع (Source Manager)
-- دکمه **Source Manager** فهرست منابع را نشان می‌کند.
-- هر سطر یک منبع است (نام، نوع، کانال/فید، شناسه منبع).
-- دابل‌کلیک یا **Toggle selected** منبع را ON/OFF می‌کند و تغییرات فوری در `config/sources.json` و `control.json` ثبت می‌شوند.
-- **Add source** برای افزودن کانال تلگرام یا فید RSS/Atom جدید است.
-- **Remove selected** منبع را حذف می‌کند.
-
-### ۵.۳) سلامت و وضعیت
-- **Health panel** نشان می‌دهد `ea_status` heartbeat تازه است یا قدیمی، `trade_mode` حساب (باید DEMO باشد) و وضعیت `Signal Live`.
-- اگر heartbeat قدیمی باشد یا کنترل‌سنتر خاموش باشد، ورودی سیگنال مسدود است (fail-closed).
-
-### ۵.۴) ورود به تلگرام
-- دکمه **Telegram Login** از شما `API ID` / `API HASH` (از my.telegram.org) و شماره تماس می‌پرسد.
-- در اولین اجرا Telethon از شما کد ورود و (در صورت نیاز) رمز دومرحله‌ای می‌خواهد.
-- فایل `nixo_telegram.session` فقط روی کامپیوتر شما می‌ماند؛ هرگز برای کسی ارسال نکنید.
-
-بعد از راه‌اندازی کنترل‌سنتر، پل (`bridge/start_bridge.bat`) نیز باید در حال اجرا باشد تا پیام‌های تلگرام را بخواند و به inbox MT5 بنویسد.
-
-## ۶) نصب اکسپرت در MT5
-
-1. فایل `mt5/Nixo_v5.04_TradingModes_AdvancedAnalytics.mq5` را در پوشه `MQL5/Experts` متاتریدر کپی کن.
+1. فایل `mt5/Nixo_v5.05_Merged_TradingModes_Theme_FA_EN.mq5` را در پوشه `MQL5/Experts` متاتریدر کپی کن.
 2. در MetaEditor فایل را باز و با F7 کامپایل کن.
 3. اکسپرت را روی نمودار نماد موردنظر قرار بده.
 4. مطمئن شو `InpSignalLabEnabled = true` باشد.
-5. `InpSignalLiveModel = SIGNAL_MODEL_D_COMBINED` را نگه دار؛ این گزینه هر دو رولت را انتخاب می‌کند.
-6. در مرحله آزمایش، حتماً `InpSignalLiveAllowed = false` بماند.
+5. مدل پیش‌فرض سیگنال `SIGNAL_MODEL_C_VOLUME` است؛ Order Roulette خاموش می‌ماند و فقط رولت حجم پس از فعال‌شدن ریسک‌روتلت حساب کار می‌کند.
+6. بدون Control Center، رفتار نسخه قبلی حفظ می‌شود: اگر `InpSignalLiveAllowed = true` باشد، حالت `EXTERNAL SIGNALS` کپی زنده را مسلح می‌کند. پس از ساخت `control.json`، EA فقط با فرمان ON معتبر و حساب Demo ورودی خارجی می‌پذیرد؛ OFF ورودی جدید را می‌بندد. برای تست بدون سفارش، `InpSignalLiveAllowed = false` بگذار.
 7. دکمه Algo Trading متاتریدر باید روشن باشد تا آزمایش‌های Paper و بعداً سفارش واقعی طبق تنظیمات اجرا شوند.
+
+در اولین اجرای این نسخه، حالت ذخیره‌شده‌ی قدیمی یک‌بار به `EXTERNAL SIGNALS` مهاجرت می‌کند؛ بعد از آن انتخاب mode توسط کاربر حفظ خواهد شد. حساب باید از نوع Hedging باشد تا کپی زنده کار کند.
 
 ## ۶) منطق دو رولت
 
@@ -116,6 +107,7 @@ py -3 signal_bridge.py --self-test
 - بعد از سبد سودده: یک پله افزایش؛ بعد از سبد زیان‌ده: یک پله کاهش؛ حداقل پله ۱.
 - سقف پیش‌فرض: `InpSignalMaxVolumeStep = 5`.
 - با `InpSignalVolumeStepFactor = 1.0` ضریب حجم پله‌ها ۱x، ۲x، ۳x، ۴x و ۵x است.
+- پله‌های رولت حجم Live تا وقتی ریسک‌روتلت اصلی حساب پس از رشد Equity به `InpRouletteTrigger = 3.00%` فعال نشده، افزایش یا کاهش نمی‌یابند.
 
 ### اثر گزینه Split Risk Across Orders
 
@@ -136,16 +128,16 @@ py -3 signal_bridge.py --self-test
 
 ## ۸) چه زمانی کپی واقعی را روشن کنم؟
 
-تا زمانی که چند سیگنال واقعی را در Journal و گزارش Paper Lab بررسی نکرده‌ای، Live را روشن نکن.
+پیش‌فرض این نسخه کپی Live را با انتخاب `EXTERNAL SIGNALS` خودکار مسلح می‌کند؛ بنابراین پیش از استفاده روی حساب واقعی، ابتدا آن را روی Demo از نوع Hedging آزمایش کن. ریسک‌روتلت پس از +۳٪ رشد Equity فعال می‌شود و Order Roulette تعداد سفارش‌ها خاموش است.
 
 وقتی آماده شدی:
 
-1. در Inputs مقدار `InpSignalLiveAllowed` را از false به true تغییر بده و تأیید کن.
-2. پس از بارگذاری مجدد اکسپرت، دکمه `SIGNAL` را در نوار کنترل پنل روشن کن.
-3. حالت `SIGNAL_MODEL_D_COMBINED` را حفظ کن تا Order Roulette و Volume Roulette هر دو روی معاملات واقعی همان کانال اعمال شوند.
-4. کپی زنده را ابتدا روی حساب Demo از نوع Hedging آزمایش کن.
+1. در پنل `EXTERNAL SIGNALS` را انتخاب کن؛ EA سیگنال Live را به‌صورت خودکار مسلح می‌کند.
+2. `SIGNAL_MODEL_C_VOLUME` را برای اعمال فقط رولت حجم نگه دار؛ Order Roulette تعداد را زیاد نمی‌کند.
+3. ریسک پایه‌ی سیگنال `InpSignalBaseRiskPct = 0.10%` است؛ پله‌های حجم پس از فعال‌شدن ریسک‌روتلت حساب در رشد +۳٪ شروع به تغییر می‌کنند.
+4. این گردش را ابتدا روی حساب Demo از نوع Hedging تست کن. پل تلگرام (`start_bridge.bat`) باید جداگانه روشن و متصل بماند.
 
-در زمان آغاز، `g_SignalLiveEnabled` خاموش است و باید از پنل جداگانه روشن شود. تغییر Input به‌تنهایی سفارش واقعی را شروع نمی‌کند.
+با انتخاب حالت دیگری غیر از External، Live برای سیگنال‌های جدید disarm می‌شود؛ پوزیشن‌های موجود دست‌نخورده می‌مانند.
 
 ## ۹) قالب پیام‌های پشتیبانی‌شده
 
@@ -205,13 +197,39 @@ CLOSE TRADE
 
 ## ۱۰) امکانات v5.04
 
+## اتصال TradingView و X
+
+Bridge از نسخهٔ فعلی برای TradingView webhook و X API v2 adapter دارد. هر دو منبع در Source Manager با حالت خاموش ساخته می‌شوند و فقط پیام‌های متنی که parser بتواند نماد مجاز، جهت، SL و حداقل یک TP را از آن استخراج کند به صف MT5 می‌روند. شروع اولیهٔ X فقط پست‌های موجود را baseline می‌کند و آن‌ها را backfill نمی‌کند.
+
+### TradingView
+
+1. در `bridge/.env.local.example` مقادیر لازم را ببین، آن را به `bridge/.env.local` کپی کن و `NIXO_TV_WEBHOOK_SECRET` را با رشتهٔ تصادفی طولانی (حداقل ۲۴ کاراکتر) پر کن. فایل `.env.local` را commit یا برای کسی ارسال نکن.
+2. در `manage_sources.bat` گزینهٔ افزودن منبع و سپس `4) TradingView webhook` را انتخاب کن؛ source ID، نمادهای مجاز و در صورت لزوم فرض تک‌نمادی را وارد کن. منبع را فقط وقتی آمادهٔ تست شدی روشن کن.
+3. Bridge روی `127.0.0.1:8765` و مسیر `/tradingview` گوش می‌دهد. TradingView نمی‌تواند این آدرس محلی را ببیند؛ یک endpoint عمومی HTTPS با reverse proxy یا tunnel امن لازم است که فقط همین مسیر را به پورت محلی بفرستد. پورت 8765 را مستقیم و بدون TLS/محافظت به اینترنت باز نکن.
+4. در TradingView Alert گزینهٔ Webhook URL را با آدرس HTTPS خودت تنظیم کن. در Message یک JSON بفرست؛ secret باید در Alert body باشد و با مقدار محلی یکی باشد:
+
+```json
+{"secret":"REPLACE_WITH_RANDOM_SECRET","source_id":"tv_xau","alert_id":"{{ticker}}-{{time}}","message":"BUY XAUUSD NOW\nSL: 4040\nTP1: 4060\nTP2: 4070"}
+```
+
+`message` باید مقادیر SL و TP واقعی استراتژی/Alert را تولید کند؛ اعداد بالا فقط نمونه‌اند. از secret یکتا استفاده کن و دسترسی تنظیمات Alert را محدود نگه دار. ارسال تکراری همان `alert_id` در هر منبع دوباره صف نمی‌شود.
+
+### X API
+
+1. در X Developer Portal دسترسی API خواندن پست‌ها و Bearer Token را از مسیر رسمی تهیه کن؛ شرایط دسترسی و نرخ درخواست به سطح دسترسی حساب X بستگی دارد.
+2. Bearer Token را فقط در `bridge/.env.local` در `X_BEARER_TOKEN` بگذار. این فایل در ignore است؛ Token را در config، اسکریپت Pine، Alert، چت یا مخزن قرار نده.
+3. در Source Manager گزینهٔ `3) X API` را بزن و **شناسهٔ عددی حساب** را وارد کن. Adapter عمداً handle را resolve یا حساب‌های دیگر را جست‌وجو نمی‌کند؛ هر منبع دقیقاً به همان author ID محدود است.
+4. نمادهای مجاز را محدود کن، منبع را ابتدا خاموش نگه دار و بعد از بررسی حساب Demo روشن کن. Bridge پست‌های جدید را با فاصلهٔ پیش‌فرض ۶۰ ثانیه می‌خواند؛ در صورت مجاز بودن API می‌توان آن را با `NIXO_X_POLL_SECONDS` تغییر داد.
+
+در هر دو روش، ابتدا `InpSignalLiveAllowed = false` نگه دار و رفتار پیام‌ها را در Paper Lab/Journal تأیید کن. این adapterها صرفاً سیگنال را به inbox مشترک `NIXO_SIG_V1` می‌فرستند؛ تضمینی برای اجرای معامله یا سود وجود ندارد.
+
 - Trading Mode سه‌حالته: MANUAL / EXTERNAL SIGNALS / STRATEGY.
 - تغییر Mode فقط ورودی‌های جدید را از مسیرهای غیرانتخابی مسدود می‌کند؛ پوزیشن‌ها، سفارش‌های معلق و SL/TP موجود دست‌نخورده باقی می‌مانند. سفارش معلق ممکن است پس از تغییر Mode اجرا شود.
 - `CLOSE NIXO POSITIONS ONLY` پوزیشن‌های Nixo را می‌بندد و Pending Orderها را حفظ می‌کند. Pending Order حفظ‌شده می‌تواند بعداً اجرا شود.
 - ثبت snapshot مدیریتی به ازای پوزیشن برای TP1/TP2/Runner/BE.
 - سقف `InpMaxOpenRiskPct` به کنترل مشترک Manual/Strategy/External ارتقا یافته است.
 - دکمه `ADVANCED REPORT` خروجی CSV از تاریخچه و پوزیشن‌های باز می‌سازد؛ داشبورد HTML آفلاین با `reporting/generate_report.bat` ساخته می‌شود.
-- منابع Telegram و RSS هم‌زمان و با enable مستقل قابل اجرا هستند. Adapter اجرایی اختصاصی X و TradingView هنوز در این نسخه نیست و باید جداگانه به `NIXO_SIG_V1` متصل شود.
+- منابع Telegram، RSS/Atom، X API و TradingView webhook با enable مستقل به صف مشترک `NIXO_SIG_V1` متصل می‌شوند.
 
 جزئیات و محدودیت‌های تست در `CHANGELOG_FA_v5.04.md` آمده است.
 
@@ -224,7 +242,7 @@ CLOSE TRADE
 - ثبت snapshot مدیریتی به ازای پوزیشن برای TP1/TP2/Runner/BE.
 - سقف `InpMaxOpenRiskPct` به کنترل مشترک Manual/Strategy/External ارتقا یافته است.
 - دکمه `ADVANCED REPORT` خروجی CSV از تاریخچه و پوزیشن‌های باز می‌سازد؛ داشبورد HTML آفلاین با `reporting/generate_report.bat` ساخته می‌شود.
-- منابع Telegram و RSS هم‌زمان و با enable مستقل قابل اجرا هستند. Adapter اجرایی اختصاصی X و TradingView هنوز در این نسخه نیست و باید جداگانه به `NIXO_SIG_V1` متصل شود.
+- منابع Telegram، RSS/Atom، X API و TradingView webhook با enable مستقل به صف مشترک `NIXO_SIG_V1` متصل می‌شوند.
 
 جزئیات و محدودیت‌های تست در `CHANGELOG_FA_v5.04.md` آمده است.
 
@@ -237,7 +255,7 @@ CLOSE TRADE
 - ثبت snapshot مدیریتی به ازای پوزیشن برای TP1/TP2/Runner/BE.
 - سقف `InpMaxOpenRiskPct` به کنترل مشترک Manual/Strategy/External ارتقا یافته است.
 - دکمه `ADVANCED REPORT` خروجی CSV از تاریخچه و پوزیشن‌های باز می‌سازد؛ داشبورد HTML آفلاین با `reporting/generate_report.bat` ساخته می‌شود.
-- منابع Telegram و RSS هم‌زمان و با enable مستقل قابل اجرا هستند. Adapter اجرایی اختصاصی X و TradingView هنوز در این نسخه نیست و باید جداگانه به `NIXO_SIG_V1` متصل شود.
+- منابع Telegram، RSS/Atom، X API و TradingView webhook با enable مستقل به صف مشترک `NIXO_SIG_V1` متصل می‌شوند.
 
 جزئیات و محدودیت‌های تست در `CHANGELOG_FA_v5.04.md` آمده است.
 
@@ -250,7 +268,7 @@ CLOSE TRADE
 - ثبت snapshot مدیریتی به ازای پوزیشن برای TP1/TP2/Runner/BE.
 - سقف `InpMaxOpenRiskPct` به کنترل مشترک Manual/Strategy/External ارتقا یافته است.
 - دکمه `ADVANCED REPORT` خروجی CSV از تاریخچه و پوزیشن‌های باز می‌سازد؛ داشبورد HTML آفلاین با `reporting/generate_report.bat` ساخته می‌شود.
-- منابع Telegram و RSS هم‌زمان و با enable مستقل قابل اجرا هستند. Adapter اجرایی اختصاصی X و TradingView هنوز در این نسخه نیست و باید جداگانه به `NIXO_SIG_V1` متصل شود.
+- منابع Telegram، RSS/Atom، X API و TradingView webhook با enable مستقل به صف مشترک `NIXO_SIG_V1` متصل می‌شوند.
 
 جزئیات و محدودیت‌های تست در `CHANGELOG_FA_v5.04.md` آمده است.
 
@@ -263,7 +281,7 @@ CLOSE TRADE
 - ثبت snapshot مدیریتی به ازای پوزیشن برای TP1/TP2/Runner/BE.
 - سقف `InpMaxOpenRiskPct` به کنترل مشترک Manual/Strategy/External ارتقا یافته است.
 - دکمه `ADVANCED REPORT` خروجی CSV از تاریخچه و پوزیشن‌های باز می‌سازد؛ داشبورد HTML آفلاین با `reporting/generate_report.bat` ساخته می‌شود.
-- منابع Telegram و RSS هم‌زمان و با enable مستقل قابل اجرا هستند. Adapter اجرایی اختصاصی X و TradingView هنوز در این نسخه نیست و باید جداگانه به `NIXO_SIG_V1` متصل شود.
+- منابع Telegram، RSS/Atom، X API و TradingView webhook با enable مستقل به صف مشترک `NIXO_SIG_V1` متصل می‌شوند.
 
 جزئیات و محدودیت‌های تست در `CHANGELOG_FA_v5.04.md` آمده است.
 
@@ -276,7 +294,7 @@ CLOSE TRADE
 - ثبت snapshot مدیریتی به ازای پوزیشن برای TP1/TP2/Runner/BE.
 - سقف `InpMaxOpenRiskPct` به کنترل مشترک Manual/Strategy/External ارتقا یافته است.
 - دکمه `ADVANCED REPORT` خروجی CSV از تاریخچه و پوزیشن‌های باز می‌سازد؛ داشبورد HTML آفلاین با `reporting/generate_report.bat` ساخته می‌شود.
-- منابع Telegram و RSS هم‌زمان و با enable مستقل قابل اجرا هستند. Adapter اجرایی اختصاصی X و TradingView هنوز در این نسخه نیست و باید جداگانه به `NIXO_SIG_V1` متصل شود.
+- منابع Telegram، RSS/Atom، X API و TradingView webhook با enable مستقل به صف مشترک `NIXO_SIG_V1` متصل می‌شوند.
 
 جزئیات و محدودیت‌های تست در `CHANGELOG_FA_v5.04.md` آمده است.
 
@@ -289,7 +307,7 @@ CLOSE TRADE
 - ثبت snapshot مدیریتی به ازای پوزیشن برای TP1/TP2/Runner/BE.
 - سقف `InpMaxOpenRiskPct` به کنترل مشترک Manual/Strategy/External ارتقا یافته است.
 - دکمه `ADVANCED REPORT` خروجی CSV از تاریخچه و پوزیشن‌های باز می‌سازد؛ داشبورد HTML آفلاین با `reporting/generate_report.bat` ساخته می‌شود.
-- منابع Telegram و RSS هم‌زمان و با enable مستقل قابل اجرا هستند. Adapter اجرایی اختصاصی X و TradingView هنوز در این نسخه نیست و باید جداگانه به `NIXO_SIG_V1` متصل شود.
+- منابع Telegram، RSS/Atom، X API و TradingView webhook با enable مستقل به صف مشترک `NIXO_SIG_V1` متصل می‌شوند.
 
 جزئیات و محدودیت‌های تست در `CHANGELOG_FA_v5.04.md` آمده است.
 
@@ -302,7 +320,7 @@ CLOSE TRADE
 - ثبت snapshot مدیریتی به ازای پوزیشن برای TP1/TP2/Runner/BE.
 - سقف `InpMaxOpenRiskPct` به کنترل مشترک Manual/Strategy/External ارتقا یافته است.
 - دکمه `ADVANCED REPORT` خروجی CSV از تاریخچه و پوزیشن‌های باز می‌سازد؛ داشبورد HTML آفلاین با `reporting/generate_report.bat` ساخته می‌شود.
-- منابع Telegram و RSS هم‌زمان و با enable مستقل قابل اجرا هستند. Adapter اجرایی اختصاصی X و TradingView هنوز در این نسخه نیست و باید جداگانه به `NIXO_SIG_V1` متصل شود.
+- منابع Telegram، RSS/Atom، X API و TradingView webhook با enable مستقل به صف مشترک `NIXO_SIG_V1` متصل می‌شوند.
 
 جزئیات و محدودیت‌های تست در `CHANGELOG_FA_v5.04.md` آمده است.
 
@@ -315,7 +333,7 @@ CLOSE TRADE
 - ثبت snapshot مدیریتی به ازای پوزیشن برای TP1/TP2/Runner/BE.
 - سقف `InpMaxOpenRiskPct` به کنترل مشترک Manual/Strategy/External ارتقا یافته است.
 - دکمه `ADVANCED REPORT` خروجی CSV از تاریخچه و پوزیشن‌های باز می‌سازد؛ داشبورد HTML آفلاین با `reporting/generate_report.bat` ساخته می‌شود.
-- منابع Telegram و RSS هم‌زمان و با enable مستقل قابل اجرا هستند. Adapter اجرایی اختصاصی X و TradingView هنوز در این نسخه نیست و باید جداگانه به `NIXO_SIG_V1` متصل شود.
+- منابع Telegram، RSS/Atom، X API و TradingView webhook با enable مستقل به صف مشترک `NIXO_SIG_V1` متصل می‌شوند.
 
 جزئیات و محدودیت‌های تست در `CHANGELOG_FA_v5.04.md` آمده است.
 
@@ -328,7 +346,7 @@ CLOSE TRADE
 - ثبت snapshot مدیریتی به ازای پوزیشن برای TP1/TP2/Runner/BE.
 - سقف `InpMaxOpenRiskPct` به کنترل مشترک Manual/Strategy/External ارتقا یافته است.
 - دکمه `ADVANCED REPORT` خروجی CSV از تاریخچه و پوزیشن‌های باز می‌سازد؛ داشبورد HTML آفلاین با `reporting/generate_report.bat` ساخته می‌شود.
-- منابع Telegram و RSS هم‌زمان و با enable مستقل قابل اجرا هستند. Adapter اجرایی اختصاصی X و TradingView هنوز در این نسخه نیست و باید جداگانه به `NIXO_SIG_V1` متصل شود.
+- منابع Telegram، RSS/Atom، X API و TradingView webhook با enable مستقل به صف مشترک `NIXO_SIG_V1` متصل می‌شوند.
 
 جزئیات و محدودیت‌های تست در `CHANGELOG_FA_v5.04.md` آمده است.
 
@@ -341,6 +359,6 @@ CLOSE TRADE
 - ثبت snapshot مدیریتی به ازای پوزیشن برای TP1/TP2/Runner/BE.
 - سقف `InpMaxOpenRiskPct` به کنترل مشترک Manual/Strategy/External ارتقا یافته است.
 - دکمه `ADVANCED REPORT` خروجی CSV از تاریخچه و پوزیشن‌های باز می‌سازد؛ داشبورد HTML آفلاین با `reporting/generate_report.bat` ساخته می‌شود.
-- منابع Telegram و RSS هم‌زمان و با enable مستقل قابل اجرا هستند. Adapter اجرایی اختصاصی X و TradingView هنوز در این نسخه نیست و باید جداگانه به `NIXO_SIG_V1` متصل شود.
+- منابع Telegram، RSS/Atom، X API و TradingView webhook با enable مستقل به صف مشترک `NIXO_SIG_V1` متصل می‌شوند.
 
 جزئیات و محدودیت‌های تست در `CHANGELOG_FA_v5.04.md` آمده است.

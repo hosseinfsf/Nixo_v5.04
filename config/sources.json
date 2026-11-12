@@ -1,5 +1,28 @@
 {
-  "session_name": "nixo_telegram",
-  "mt5_common_files": "",
-  "sources": []
+  "sources": [
+    {
+      "id": "prime_fx_accadmy97",
+      "name": "prime_fx_accadmy97",
+      "source_type": "telegram",
+      "enabled": true,
+      "parser": "standard",
+      "allowed_symbols": [
+        "XAUUSD"
+      ],
+      "assume_single_symbol": false,
+      "channel": "prime_fx_accadmy97"
+    },
+    {
+      "id": "LFT_Journals",
+      "name": "LFT_Journals",
+      "source_type": "telegram",
+      "enabled": true,
+      "parser": "standard",
+      "allowed_symbols": [
+        "XAUUSD"
+      ],
+      "assume_single_symbol": false,
+      "channel": "LFT_Journals"
+    }
+  ]
 }
